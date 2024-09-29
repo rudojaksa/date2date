@@ -1,0 +1,3 @@
+# -*-conf-*-
+input: D Mon YYYY,hh:mm
+output: YYYY-MM-DD hh:mm

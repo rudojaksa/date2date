@@ -1,0 +1,2 @@
+exclude: #*# date2date date2date.md dat2dat.pl*
+skipdir: usr

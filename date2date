@@ -1,0 +1,995 @@
+#!/usr/bin/perl
+# date2date generated from date2date-0.2/date2date.pl 2024-09-29
+
+# included ".version.pl"
+our $PACKAGE = "date2date";
+our $VERSION = "0.2";
+our $AUTHOR = "R.Jaksa 2017,2024 GPLv3";
+our $SUBVERSION = "";
+# end ".version.pl"
+
+# included ".date2date.built.pl"
+our $BUILT = "2024-09-29";
+# end ".date2date.built.pl"
+
+our @DIF = ("M/D/Y","D~Mon~Y");	# default input formats
+our $DOF = "YYYY-MM-DD";	# default output format
+our $MAR = "()[]{}\"\' \t,;";	# margin delimiters
+
+$HELP=<<EOF;
+
+NAME
+    date2date - reformat date values
+
+USAGE
+    date2date [OPTIONS] FILE [CC(FILE2)]... CK(> OUTPUT_FILE)
+    cat FILE | date2date [OPTIONS] CK(> OUTPUT_FILE)
+
+DESCRIPTION
+    Find all date/time fields in the file that match the input format and reformat
+    them to the output format.
+
+OPTIONS
+          -h  This help.
+          -v  Verbose messaging using CD(STDERR) (CC(-vv) for additional debug messages).
+   -i FORMAT  Date format in input data.  When used multiple times, the first
+              value is looked up first, second then... CK((default: @DIF))
+   -o FORMAT  Date format for the output. CK((default: $DOF))
+     -y YEAR  Default year, this (and the last) year are used if needed.
+    -m MONTH  Default month (as number 1..12).
+      -d DAY  Default month (as number 1..31).
+ -t CC(HOUR:MIN)  Default time (also CC(HOUR:MIN:SEC)).
+  CC(-c/r/g/k/w)  Color of replaced fields CC(cyan)/CR(red)/CG(green)/CK(black)/CW(white).
+
+FORMAT
+    CC(s)    second                CK( 0  1 ... 59) (decimal too)
+    CC(ss)   second two-digit      CK(00 01 ... 59) (decimal too)
+    CC(ss.s) one decimal place     CK(00.0 00.1 ... 59.9)
+    CC(m)    minute                CK( 0  1 ... 59)
+    CC(mm)   minute two-digit      CK(00 01 ... 59)
+    CC(h)      hour                CK( 0  1 ... 24)
+    CC(hh)     hour two-digit      CK(00 01 ... 24)
+    CC(D)       day number         CK( 1  2 ... 31)
+    CC(DD)      day two-digit      CK(01 02 ... 31)
+#   CC(Day)     day full           CK(Monday Tuesday ... Sunday)
+#   CC(D3)      day three-letters  CK(Mon Tue Wen Thu Fri Sat Sun)
+#   CC(DA)      day twe-letters    CK(MO TU WE TH FR SA SU)
+#   CC(D1)      day one-letter     CK(M T W R F S Y)
+#   CC(D0)      day mixed          CK(M Tu W Th F Sat Sun)
+    CC(M)     month numerical      CK( 1  2 ... 12)
+    CC(MM)    month two-digit      CK(01 02 ... 12)
+    CC(Month) month full name      CK(January February ... December)
+    CC(Mon)   month three-letters  CK(Jan Feb ... Dec)
+    CC(MO)    month two-letters    CK(JA FE MR AP MY JN JL AU SE OC NV DE)
+    CC(yyyy)   year safe           CK(1900 ... 2099) (only 19XX and 20XX)
+  CC(Y)CK(/)CC(YYYY)   year full           CK(1999 2000 2001 ...) (any from 1000 ... 9999)
+    CC(YY)     year two-digit      CK(99 00 01 ...)
+    CC(Year)   year                CK(-3500 1999 100000) (any number)
+    CC(epoch) epoch ten-digit      CK(0000000000 1234567890 ...) (decimal too)
+    CC(Epoch) epoch                CK(0 1234567890 ...) (decimal too)
+
+CONFIG FILE
+    Configuration file CC(.date2date) has "key: value" syntax.  Hash CC(#) starts
+    a comment.  Tilde CC(~) can be used instead of space.  Double-dot config
+    CC(..date2date) file is accepted in all subdirectories and home-directory
+    file CC(~/.date2date) is accepted globally for the user.  Example:
+
+    CW(input: M/D/YYYY YYYY/MM/DD  # 2/22/2022 2022/02/22)
+    CW(output: D~Mon~YYYY          # 22 Feb 2022)
+
+LIST OF FORMATS
+    02/22/2022  CW(MM/DD/YYYY)  USA
+    22.02.2022  CW(DD.MM.YYYY)  EUR
+    2022-02-22  CW(YYYY-MM-DD)  ISO (ISO 8601, sort-safe)
+    9 Feb 2022  CW(D~Mon~YYYY)
+    February 22, 2022  CW("Month D, YYYY")
+    2022-02-22 22:22   CW("YYYY-MM-DD hh:mm")  ISO date plus time
+    02 Feb 2022,22:22  CW(DD~Mon~YYYY,hh:mm)   two fields from/for CSV
+
+EXAMPLES
+    Two CSV fields (date and time) to a singel ISO field:
+    CW(date2date -i DD~Mon~YYYY,hh:mm -o YYYY-MM-DD~hh:mm file.csv)
+
+VERSION
+    $PACKAGE-$VERSION$SUBVERSION CK($AUTHOR) CK(built $BUILT)
+
+EOF
+
+# --------------------------------------------------------------------------------------------- ARGVS
+
+# included "colors.pl"
+# colors.pl generated from libpl-0.1/src/colors.pl 2024-09-04
+{ # TERMINAL COLORS
+
+our $CR_="\033[31m"; # color red
+our $CG_="\033[32m"; # color green
+our $CY_="\033[33m"; # color yellow
+our $CB_="\033[34m"; # color blue
+our $CM_="\033[35m"; # color magenta
+our $CC_="\033[36m"; # color cyan
+our $CW_="\033[37m"; # color white
+our $CK_="\033[90m"; # color black
+our $CP_="\033[91m"; # color pink
+our $CL_="\033[92m"; # color lime
+our $CS_="\033[93m"; # color sulphur yellow
+our $CZ_="\033[94m"; # color azure
+our $CO_="\033[95m"; # color orchid
+our $CA_="\033[96m"; # color aqua cyan
+our $CF_="\033[97m"; # color fluorescent white
+our $CD_="\033[0m";  # color default
+
+# return length of string without escape sequences
+our sub esclen { my $s = $_[0];
+  $s =~ s/\033\[[0-9]+m//g;
+  return length $s; }
+
+sub CK { return "$CK_$_[0]$CD_" }
+sub CC { return "$CC_$_[0]$CD_" }
+sub CW { return "$CW_$_[0]$CD_" }
+
+} # R.Jaksa 2003,2008,2019,2024 GPLv3
+# end "colors.pl"
+
+# included "array.pl"
+# array.pl generated from libpl-0.1/src/array.pl 2024-09-04
+{ # PERL ARRAYS SUPPORT
+
+# inar newgen, returns index+1 instead of simple 0/1
+# inar(\@a,$s) - check whether the string is in the array, return its idx+1 or zero (1st match)
+our sub inar {
+  my $a=$_[0];	# array ref
+  my $s=$_[1];	# string
+  for(my $i=0;$i<=$#{$a};$i++) { return $i+1 if $$a[$i] eq $s; }
+  return 0; }
+
+# clar(\@a,$s) - clear the string in the array (1st match), return its idx+1 or zero
+our sub clar {
+  my $a=$_[0];	# array ref
+  my $s=$_[1];	# string
+  for(my $i=0;$i<=$#{$a};$i++) {
+    if($$a[$i] eq $s) {
+      $$a[$i] = "";
+      return $i+1; }}
+  return 0; }
+
+# pushq(\@a,$s) - string push unique, only if not there
+our sub pushq {
+  my $a=$_[0];	# array ref
+  my $s=$_[1];	# string
+  return if inar $a,$s;
+  push @{$a},$s; }
+
+# inar \@a,$s; checks whether the string $s is in an array @a
+# sub inar { for(@{$_[0]}) { return 1 if $_ eq $_[1] } return 0 }
+
+# delar \@a,$s; removes 1st instance of the string $s from an array @a, i.e. set it to empty ""
+sub delar { for(@{$_[0]}) { $_="" if $_ eq $_[1] }}
+
+# return the length of array without empty "" elements
+sub lenar { my $i=0; for(@{$_[0]}) { $i++ if $_ ne "" } return $i }
+
+} # R.Jaksa 2008,2024 GPLv3
+# end "array.pl"
+
+# included "io.pl"
+# io.pl generated from libpl-0.1/src/io.pl 2024-09-04
+{ # I/O ROUTINES
+
+sub writefile { open(O,">$_[0]") or die "$_[0]: $!"; print O $_[1]; close(O) }
+
+} # R.Jaksa 2003,2024 GPLv3
+# end "io.pl"
+
+# included "path.pl"
+# path.pl generated from libpl-0.1/src/path.pl 2024-09-04
+{ # FILESYSTEM PATHS ROUTINES
+
+# return the dirname from the path
+# ccc/aaa/bbb  -> ccc/aaa
+# ccc/aaa/bbb/ -> ccc/aaa
+sub dirname { my $p=$_[0]; $p=~s/\/*$//; $p=~s/\/[^\/]*$//; return $p }
+
+# return directory part of path
+# sub dirname { return $1 if $_[0] =~ /^(.*)\/[^\/]*$/ }
+
+# return file name from path
+sub fname { my $p=$_[0]; $p=~s/^.*\///; return $p }
+
+# return file suffix
+sub sx { my $s=$_[0]; $s=~s/^.*\.//; return $s }
+
+# beautify($path,$cwd)
+our sub beautify {
+  my $qcwd = quotemeta $_[1];								# CWD
+  my $p1=$_[1]; $p1=~s/\/*$//; $p1=~s/[^\/]*$//; $p1=~s/\/*$//; my $qp1 = quotemeta $p1;# parent
+  my $p2=$p1; $p2=~s/\/*$//; $p2=~s/[^\/]*$//; $p2=~s/\/*$//; my $qp2 = quotemeta $p2;	# grandparent
+  my $qh = quotemeta $ENV{HOME};							# home
+  my $p = $_[0];
+
+  $p =~ s/^$qcwd\/// if $qcwd;		# /abc/def/ghi -> ghi if cwd=/abc/def
+  $p =~ s/^$qp1\//..\// if $qp1;	# /abc/def/ghi -> ../ghi if cwd=/abc/def/xyz
+  $p =~ s/^$qp2\//..\/..\// if $qp2;	# /abc/def/ghi -> ../../ghi if cwd=/abc/def/xyz/ijk
+  $p =~ s/^$qh\//~\// if $qh;		# /home/abc/xyz -> ~/xyz
+
+  $p =~ s/^\.\///;			# remove the leading "./"
+
+  return $p }
+
+# just remove the leading "./" from the path
+sub undot { my $p=$_[0]; $p=~s/^\.\///; return $p }
+
+} # R.Jaksa 2024 GPLv3
+# end "path.pl"
+
+# included "verbose.pl"
+# verbose.pl generated from verbose-0.3/src/verbose.pl 2024-09-28
+{ # VERBOSE KEY-MESSAGE-COMMENT -------------------------------------------------------------- CONFIG
+
+# included "string.pl"
+# string.pl generated from libpl-0.1/src/string.pl 2024-09-04
+{ # SIMPLE STRING ROUTINES
+
+# remove the last newline from string
+our sub nonl { my $s=$_[0]; chomp $s; return $s }
+
+# remove all newlines from a string, replace them with spaces
+our sub unnl {
+  my $s=$_[0];
+  $s =~ s/\n+$//;
+  $s =~ s/\n/ /g;
+  return $s }
+
+} # R.Jaksa 2024 GPLv3
+# end "string.pl"
+
+# key length
+our $VERBOSE_KLEN = 10;
+
+# explicit colors
+our ($VERBOSE_C1,$VERBOSE_C2,$VERBOSE_C3);
+
+# prefix/suffix
+our ($VERBOSE_PX1,$VERBOSE_PX2,$VERBOSE_PX3);
+our ($VERBOSE_SX1,$VERBOSE_SX2,$VERBOSE_SX3); $VERBOSE_SX1=":";
+
+# key words for color of key and for color of message
+our (%VERBOSE_WORD,%VERBOSE_WORD2);
+#   $VERBOSE_WORD{$_} =$CM_ for split / /,"cmd save update";
+#   $VERBOSE_WORD2{$_}=$CM_ for split / /,"cmd";
+    $VERBOSE_WORD{$_} =$CR_ for split / /,"error";
+    $VERBOSE_WORD2{$_}=$CR_ for split / /,"error";
+
+# key patterns
+our %VERBOSE_PAT;
+    $VERBOSE_PAT{qr/^[A-Z]+$/} = $CC_;	# cyan for uppercase words
+
+# ---------------------------------------------------------------------------------------- FORMATTING
+
+our sub announce {
+  my ($K,$M,$C) = @_;	# key/message/comment
+  $M = unnl $M;
+  $C = unnl $C;
+  # $M = "$CK_\[]$CD_" if $M eq ""; # default empty message: [] # TODO: later and systematicaly
+
+  my ($c1,$c2,$c3);	# colors
+  my ($e1,$e2,$e3);	# end of color
+
+  # key/message color
+  if(not defined $VERBOSE_C1) {
+    for(keys %VERBOSE_PAT) { $c1=$VERBOSE_PAT{$_} if $K=~/$_/ }
+    for(keys %VERBOSE_WORD) { $c1=$VERBOSE_WORD{$_} if $K=~/(^|[^a-zA-Z0-9_-])$_([a-zA-Z0-9_-]|$)/ }}
+  if(not defined $VERBOSE_C2) {
+    for(keys %VERBOSE_WORD2) { $c2=$VERBOSE_WORD2{$_} if $K=~/(^|[^a-zA-Z0-9_-])$_([a-zA-Z0-9_-]|$)/ }}
+
+  # comment color
+  if(not defined $VERBOSE_C3) { $c3=$CK_ }
+
+  # explicit color
+  $c1=$VERBOSE_C1 if defined $VERBOSE_C1;
+  $c2=$VERBOSE_C2 if defined $VERBOSE_C2;
+  $c3=$VERBOSE_C3 if defined $VERBOSE_C3;
+
+  # end of color
+  $e1=$CD_; $e1="" if not defined $c1 or $c1 eq "" or $c1 eq $CD_;
+  $e2=$CD_; $e2="" if not defined $c2 or $c2 eq "" or $c2 eq $CD_;
+  $e3=$CD_; $e3="" if not defined $c3 or $c3 eq "" or $c3 eq $CD_;
+
+  # output
+  my $s;
+
+  # key
+  my $sp = " " x ($VERBOSE_KLEN-esclen($K)); # space for right alignment
+  $s .= $sp.$c1.$VERBOSE_PX1.$K.$VERBOSE_SX1.$e1;
+
+  # message
+  $s .= " ".$c2.$VERBOSE_PX2.$M.$VERBOSE_SX2.$e2 if defined $M and $M ne "";
+
+  # comment
+  $s .= " ".$c3.$VERBOSE_PX3.$C.$VERBOSE_SX3.$e3 if defined $C and $C ne "";
+
+  print STDERR "$s\n" }
+
+# ------------------------------------------------------------------------------------------ WRAPPERS
+
+our sub verbose { announce @_ if $VERBOSE }
+
+# error(key,msg,comm): kmc error in red
+# error(str): plain error message in red
+# error()exits with zero, warn() doesn't exit
+our sub error {
+  if(defined $_[1]) { local ($VERBOSE_C1,$VERBOSE_C2)=($CR_,$CR_); announce @_; exit }
+  print STDERR "$CR_$_[0]$CD_\n"; exit }
+use subs 'warn'; # must use use subs to redefine builtin warn
+our sub warn {
+  if(defined $_[1]) { local ($VERBOSE_C1,$VERBOSE_C2)=($CR_,$CR_); announce @_; return }
+  print STDERR "$CR_$_[0]$CD_\n" }
+
+# break and exit (with zero), break = break messaging with an ampty line
+our sub brexit { print STDERR "\n"; exit }
+
+# ------------------------------------------------------------------------------------ COLOR SPECIFIC
+# color-specific variants, use localized global variables to affect only the single announce call
+
+our sub announce_rq { local ($VERBOSE_C1,$VERBOSE_SX1)=($CR_,"?"); announce @_ }
+our sub announce_rw { local ($VERBOSE_C1,$VERBOSE_C2)=($CR_,$CW_); announce @_ }
+
+our sub verbose_cc { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CC_,$CC_); announce @_ }
+our sub verbose_cr { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CC_,$CR_); announce @_ }
+our sub verbose_cg { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CC_,$CG_); announce @_ }
+our sub verbose_ck { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CC_,$CK_); announce @_ }
+our sub verbose_dr { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CD_,$CR_); announce @_ }
+our sub verbose_rr { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CR_,$CR_); announce @_ }
+our sub verbose_mm { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CM_,$CM_); announce @_ }
+our sub verbose_mg { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CM_,$CG_); announce @_ }
+our sub verbose_mk { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CM_,$CK_); announce @_ }
+our sub verbose_kk { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CK_,$CK_); announce @_ }
+our sub verbose_kg { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CK_,$CG_); announce @_ }
+our sub verbose_pp { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=($CP_,$CP_); announce @_ }
+our sub verbose_dw { return if not $VERBOSE; local ($VERBOSE_C1,$VERBOSE_C2)=("",$CW_); announce @_ }
+
+# ---------------------------------------------------------------------------------------------------
+
+# black-green-path: directory=black filename=green
+our sub bgpath { my $f=$_[0];
+  $f =~ s/^(.*\/)?(.*?)$/$CK_$1$CG_$2$CD_/;
+  return $f }
+
+our sub call { verbose "cmd",$_[0]; return `$_[0]` }
+
+} # ------------------------------------------------------------------ # R.Jaksa 2019,2023,2024 GPLv3
+# end "verbose.pl"
+
+# included "printhelp.pl"
+# printhelp.pl generated from helpman-0.3/src/printhelp.pl 2024-08-27
+{ # PRINT A MAN-STYLE HELP
+  # require color.pl
+
+our sub printhelp {
+  my $help = $_[0];
+
+  # we will store parsed text elements in this private hash
+  my %STR;				# private substitutions content strings
+  my $id=0;				# last ID
+
+  # in the text these elements will be repled by this string
+  my ($L,$R) = ("\#\#\>","\<\#\#");	# private left/right brace
+  my sub REP { return "$L$_[0]$R"; }	# return complete private substitution identifier
+
+  # ------------------------------------------------------------------------ PREPROCESSOR
+
+  $help =~ s/(\n\#.*)*\n/\n/g;		# skip commented-out lines
+  $help =~ s/\\\)/REP "brc2"/eg;	# save escaped bracket
+
+  # ------------------------------------------------------------------------------ PARSER
+
+  # CC(text)
+  my $colors = "CWRDKGMB";
+  my $RE1 = qr/(\((([^()]|(?-3))*)\))/x; # () group, $1=withparens, $2=without
+  $STR{$id++}=$4 while $help =~ s/([^A-Z0-9])(C[$colors])$RE1/$1.REP("c$2$id")/e;
+
+  # options lists, like -option ...
+  $STR{$id++}=$2 while $help =~ s/(\n[ ]*)(-[a-zA-Z0-9]+(\[?[ =][A-Z]{2,}(x[A-Z]{2,})?\]?)?)([ \t])/$1.REP("op$id").$5/e;
+
+  # bracketed uppercase words, like [WORD]
+  $STR{$id++}="$1$2" while $help =~ s/\[([+-])?([A-Z]+)\]/REP("br$id")/e;
+
+  # plain uppercase words, like sections headers
+  $STR{$id++}=$2 while $help =~ s/(\n|[ \t])(([A-Z_\/-]+[ ]?){4,})/$1.REP("pl$id")/e;
+
+  # --------------------------------------------------------------------------- PROCESSOR
+
+  # re-substitute
+  $help =~ s/${L}pl([0-9]+)$R/$CC_$STR{$1}$CD_/g;	# plain uppercase words
+  $help =~ s/${L}op([0-9]+)$R/$CC_$STR{$1}$CD_/g;	# options
+  $help =~ s/${L}br([0-9]+)$R/\[$CC_$STR{$1}$CD_\]/g;	# bracketed words
+
+  # CC(text)
+  my %cc; $cc{$_} = ${"C".$_."_"} for split //,$colors;
+  $help =~ s/${L}cC([$colors])([0-9]+)$R/$cc{$1}$STR{$2}$CD_/g;
+
+  # escapes
+  $help =~ s/${L}brc2$R/)/g;
+
+  # ----------------------------------------------------------------------- POSTPROCESSOR
+
+  # star bullets
+  $help =~ s/\n(\h\h+)\* /\n$1$CC_\*$CD_ /g;
+
+  print $help; }
+
+} # R.Jaksa 2015,2019,2024 GPLv3
+# end "printhelp.pl"
+
+printhelp $HELP and exit 0 if inar \@ARGV,"-h";
+for(@ARGV) { next if $_ ne "-v"; $VERBOSE=1; $_=""; last }
+for(@ARGV) { next if $_ ne "-vv"; $DEBUG=1; $_=""; last }
+$VERBOSE=1 if $DEBUG;
+
+# default year
+our ($DY,$DM,$DD,$Dh,$Dm,$Ds);
+for(0..$#ARGV-1) { 
+  next if $ARGV[$_] ne "-y" or not $ARGV[$_+1]=~/^[\d]+$/;
+  $DY=$ARGV[$_+1]; $ARGV[$_]=""; $ARGV[$_+1]=""; last }
+for(0..$#ARGV-1) { 
+  next if $ARGV[$_] ne "-m" or not $ARGV[$_+1]=~/^[\d]+$/ or $ARGV[$_+1]<1 or $ARGV[$_+1]>12;
+  $DM=$ARGV[$_+1]; $ARGV[$_]=""; $ARGV[$_+1]=""; last }
+for(0..$#ARGV-1) { 
+  next if $ARGV[$_] ne "-d" or not $ARGV[$_+1]=~/^[\d]+$/ or $ARGV[$_+1]<1 or $ARGV[$_+1]>31;
+  $DD=$ARGV[$_+1]; $ARGV[$_]=""; $ARGV[$_+1]=""; last }
+for(0..$#ARGV-1) { 
+  next if $ARGV[$_] ne "-t" or not $ARGV[$_+1]=~/^[\d:]+$/;
+  if($ARGV[$_+1]=~/^(\d+)(?::(\d+))?(?::(\d+))?$/) { ($Dh,$Dm,$Ds)=($1,$2,$3) } else { next }
+  $ARGV[$_]=""; $ARGV[$_+1]=""; last }
+
+# color
+for(@ARGV) { next if $_ ne "-c"; $COLOR="C"; $_=""; last }
+for(@ARGV) { next if $_ ne "-r"; $COLOR="R"; $_=""; last }
+for(@ARGV) { next if $_ ne "-g"; $COLOR="G"; $_=""; last }
+for(@ARGV) { next if $_ ne "-k"; $COLOR="K"; $_=""; last }
+for(@ARGV) { next if $_ ne "-w"; $COLOR="W"; $_=""; last }
+
+# input format, multiple accepted
+our @IF;
+for(0..$#ARGV-1) { 
+  next if $ARGV[$_] ne "-i" or $ARGV[$_+1] eq "";
+  push @IF,$ARGV[$_+1]; $ARGV[$_]=""; $ARGV[$_+1]="" }
+
+# output format, only first appearance
+our $OF;
+for(0..$#ARGV-1) { 
+  next if $ARGV[$_] ne "-o" or $ARGV[$_+1] eq "";
+  $OF=$ARGV[$_+1]; $ARGV[$_]=""; $ARGV[$_+1]=""; last }
+
+# files
+our @FILE;
+for(0..$#ARGV) { 
+  next if $ARGV[$_] eq "" or not -f $ARGV[$_];
+  push @FILE,$ARGV[$_]; $ARGV[$_]="" }
+
+# wrong args
+$VERBOSE_C1 = $CC_;
+$VERBOSE_KLEN = 13;
+my @wrong; for(@ARGV) { push @wrong,$_ if $_ ne ""; }
+warn "wrong options",join(" ",@wrong) if @wrong;
+# error "no input file specified" if not @FILE;
+
+# verbose
+verbose "file",bgpath($_) for @FILE;
+
+# margins
+my $mar=$MAR; $mar=~s/\t/\\t/; $mar=~s/\n/\\n/; $mar=~s/\r/\\r/;
+$MAR = quotemeta $MAR; $MAR = qr/[$MAR]/; # margin delimiters
+verbose "margins",$mar,$MAR;
+
+# -------------------------------------------------------------------------------------------- CONFIG
+
+# included "config.pl"
+# config.pl generated from config-0.1/src/config.pl 2024-09-29
+{ # DOT-CONFIG ROUTINES
+  # required array.pl colors.pl
+
+our @cfg_checked; # for verbose: files checked in addition to the one found
+
+# remove leading dots from string
+my sub undot { my $s=$_[0]; $s=~s/^\.*//; return $s }
+
+# check .cfgfile in the CWD
+# $file = cfgfile_cwd($name,$cwd)
+# $cwd is optional for the cases where we are already in different directory
+our sub cfgfile_cwd {
+  my $name = undot $_[0];
+  my $cwd = $_[1];
+  if(defined $cwd) {
+    return "$cwd/.$name" if -f "$cwd/.$name";
+    push @cfg_checked,"$cwd/.$name" }
+  else {
+    return ".$name" if -f ".$name";
+    push @cfg_checked,".$name" }
+  return } # explicit return of undef
+
+# check ..cfgfile in parentdirs
+# $file = cfgfile_parents($name,$cwd)
+# provided $cwd is honored, i.e. we will fail if it doesn't exist
+our sub cfgfile_parents {
+  my $name = undot $_[0];
+  my $dir; my $cwd = $_[1];
+  if(defined $cwd) { return if not -d $cwd; $dir = $cwd }
+  else { $dir = `pwd`; chomp $dir }
+  while($dir) {
+    my $f = "$dir/..$name";
+    $dir =~ s/\/[^\/]*$//; # remove last subdir part
+    if(-f $f) { return $f } else { push @cfg_checked,$f }
+    last if $dir =~ /^\/home\/?[^\/]*$/ } # skip /home/user and /home
+  return }
+
+# check .cfgfile in home dir
+our sub cfgfile_home {
+  my $name = undot $_[0];
+  my $f = "/home/$ENV{USER}/.$name";
+     $f = "$ENV{HOME}/.$name" if defined $ENV{HOME};
+  return $f if -f $f;
+  push @cfg_checked,$f;
+  return }
+
+# $file = cfgfile($name)
+# $file = cfgfile($name,$cwd)
+our sub cfgfile {
+  my ($name,$cwd) = @_;
+  my $cfg = cfgfile_cwd $name;
+     $cfg = cfgfile_parents $name,$cwd if not $cfg;
+     $cfg = cfgfile_home $name if not $cfg;
+  return $cfg }
+
+# parsers: key-colon-value, unerstands doublequoted values and hash comments
+# returns hash of scalars or hash of arrays for multiple-keys syntax
+
+# return raw array of values per key
+our sub cfgparse_arr {
+  my $file = $_[0];
+  return if not -f $file;
+  my %cfg;
+  open $handle,"$file" or die "$file: $!";
+  for my $line (<$handle>) {
+    chomp $line;
+    next if $line=~/^[\h\n]*$/;
+    next if $line=~/^\h*\#/;
+    push @{$cfg{$1}},$2 if $line =~ /^\h*([^:]+):\h+(.*?)\h*(\h\#.+)?$/ }
+  close $handle;
+  return %cfg }
+
+# return sclar per key, combine multiple values as a space seeparatod string
+our sub cfgparse {
+  my %cfg1 = cfgparse_arr $_[0];
+  my %cfg;
+  for my $k (keys %cfg1) {
+    my @arr; pushq \@arr,$_ for @{$cfg1{$k}}; # skip duplicities
+    $cfg{$k} = join " ",@arr }
+  return %cfg }
+
+# nice-print cfg
+our sub cfgdebug { print "$CC_$_:$CD_ $_[0]{$_}\n" for keys %{$_[0]} }
+our sub cfgdebug_arr { for my $k (keys %{$_[0]}) { print "$CC_$k:$CD_ $_\n" for @{$_[0]{$k}} }}
+
+} # R.Jaksa 2021,2024 GPLv3
+# end "config.pl"
+
+my $cfg = cfgfile ".date2date";
+if($DEBUG) { verbose_kk "checked cfg",$_ for @cfg_checked }
+verbose_cg "config",$cfg if $cfg;
+
+my %CFG = cfgparse_arr $cfg if $cfg;
+
+# defaults: if cli value missing, look for the config value, or look for the default
+my $IFhow = "CLI"; my $OFhow = "CLI";
+if(not @IF) {
+  if(defined $CFG{input}) { @IF=@{$CFG{input}}; $IFhow=$cfg }
+  else			  { @IF=@DIF; $IFhow="default" }}
+if(not $OF) {
+  if(defined $CFG{output}) { $OF=$CFG{output}[0]; $OFhow=$cfg }
+  else			   { $OF=$DOF; $OFhow="default" }}
+
+# ----------------------------------------------------------------------------------------------- NOW
+our %NOW;
+my @now = localtime;
+
+$NOW{Y} = $now[5]+1900;
+$NOW{M} = $now[4]+1;
+$NOW{D} = $now[3];
+$NOW{h} = $now[2];
+$NOW{m} = 0; $NOW{m} = 30 if $now[1]>=30;
+$NOW{s} = 0;
+
+$NOW{Y} = $DY if defined $DY;
+$NOW{M} = $DM if defined $DM;
+$NOW{D} = $DD if defined $DD;
+$NOW{h} = $Dh if defined $Dh;
+$NOW{m} = $Dm if defined $Dm;
+$NOW{s} = $Ds if defined $Ds;
+
+my $nowM=$NOW{M}; $nowM="0$nowM" if $nowM<10;
+my $nowD=$NOW{D}; $nowD="0$nowD" if $nowD<10;
+my $nowh=$NOW{h}; $nowh="0$nowh" if $nowh<10;
+my $nowm=$NOW{m}; $nowm="0$nowm" if $nowm<10;
+my $nows=$NOW{s}; $nows="0$nows" if $nows<10;
+verbose "default date","$NOW{Y}-$nowM-$nowD $nowh:$nowm$CK_:$nows$CD_";
+
+# -------------------------------------------------------------------------------------- INPUT FORMAT
+our %REIF; # regexes for input formats
+our %VEIF; # verbose input formats
+our %VIF;  # variables order array for input formats
+
+# included "common.pl"
+
+# return zero padded 2-decimal integer
+our sub d2dd {
+  return "0$_[0]" if $_[0]<10;
+  return "$_[0]" }
+
+# return zero padded 4-decimal integer
+our sub d2dddd {
+  return "000$_[0]" if $_[0]<10;
+  return "00$_[0]" if $_[0]<100;
+  return "0$_[0]" if $_[0]<1000;
+  return "$_[0]" }
+
+# return zero padded 10-decimal integer
+our sub d10d {
+  return "$_[0]" if $_[0]>=1000000000;
+  return "0$_[0]" if $_[0]>=100000000;
+  return "00$_[0]" if $_[0]>=10000000;
+  return "000$_[0]" if $_[0]>=1000000;
+  return "0000$_[0]" if $_[0]>=100000;
+  return "00000$_[0]" if $_[0]>=10000;
+  return "000000$_[0]" if $_[0]>=1000;
+  return "0000000$_[0]" if $_[0]>=100;
+  return "00000000$_[0]" if $_[0]>=10;
+  return "000000000$_[0]" if $_[0]>=0;
+  return "$_[0]" }
+# end "common.pl"
+
+# included "parser.pl"
+{ # GENERIC PARSING SUPPORT
+
+# start/end of stored-text pattern, plus their qoutemeta versions
+# * these are non-text unusual patterns to appear in the string
+# * start and end patterns are different, and indicate direction
+our $STX = "\001\002"; our $STQ = qr/\\\001\\\002/;
+our $ETX = "\003\001"; our $ETQ = qr/\\\003\\\001/;
+
+# debug functions ta visualize strings containing STX/ETX markers
+our sub untx { my $s=$_[0]; $s=~s/\001\002/$CK_=>$CD_/g; $s=~s/\003\001/$CK_<=$CD_/g; return $s }
+our sub prtx { print STDERR "  $_[0]: ".untx($_[1])."\n" } # prtx "key",$data;
+
+} # R.Jaksa 2024 GPLv3
+# end "parser.pl"
+
+# included "input-parser.pl"
+{ # INPUT FORMAT PARSER FOR DATE2DATE
+  # require parser.pl
+
+# input is freed once taken, i.e. Y can be used only once "Y Y" should match "2022 Y", like "Y \Y"
+my $FOUND=""; # list of found names: "yyyy|YYYY|YY"...
+my %TAKEN=(); # whether the type was already taken, so it can be freed from further matching
+my @HIDEN=(); # stored strings for replacement in the input format string
+my $hi;	      # current index in @HIDEN
+my $str;      # current input format string
+
+# parse($variable_type,$variable_name,$regex) $_[0]=q $_[1]="Y" $_[2]="yyyy" $_[3]=qr/19\d\d|20\d\d/
+# type: Y=year M=month D=day h=hour m=month s=sec e=epoch (once Y is taken no further year search is done)
+my sub parse {
+  my ($type,$name,$re) = @_;
+  # print STDERR "$type: $name <- $re [$str]\n"; # print all names considered
+  return if $TAKEN{$type};
+  if($REIF{$str} =~ s/$name/$STX$hi$ETX/) {	# find the name in the REIF
+    $HIDEN[$hi++] = qr/($re)/;			# 
+    $TAKEN{$type} = 1 }				# 
+  # print STDERR "$type: $name <- $re\n\n" if $TAKEN{$type}; # print only these taken by input formats
+  return if not $TAKEN{$type};
+  $VEIF{$str} =~ s/$name/$CC_$name$CD_/;	# find and mark the name int the VEIF
+  $FOUND .= "$name|" } # add the name to the order
+
+# globals: @IF=input %REIF=output %VIF=output
+our sub input_parser {
+  for(@IF) {					# here str becomes "global" current IFmt string
+    $str = $_;					# global variable, used as key
+    my $qstr = quotemeta $str;			# local, used to parse
+    my $vstr = $str;
+    $FOUND=""; %TAKEN=();			# these are input-pattern specific too
+    @HIDEN=(); $hi=0;				# replaced stored text, current index
+
+    # hide escapes \Y,\M,\D,... (in qstr these are already quotemeta, so two double backslash)
+    while($qstr=~s/\\\\([YyMDhmseE~])/$STX$hi$ETX/) { $HIDEN[$hi++]=$1 }
+    while($vstr=~  s/\\([YyMDhmseE~])/$STX$hi$ETX/) { $HIDEN[$hi++]=$1 }
+
+    # replace ~ by spaces
+    $qstr =~ s/\\~/ /g;
+    $vstr =~ s/\~/ /g;
+
+    $REIF{$str} = $qstr;			# regex to build
+    $VEIF{$str} = $vstr;			# verbose msg to build
+    # prtx "1",$REIF{$str};
+
+    # find the input format variable parts and replace them by appropriate regex group string
+    # the order must be parsing-safe i.e. YYYY before YY and Year before Y
+
+    parse "Y","yyyy",qr/19\d\d|20\d\d/;
+    parse "Y","YYYY",qr/\d{4}/;
+    parse "Y","YY",qr/\d\d/;
+    parse "Y","Year",qr/-?\d+/;
+    parse "Y","Y",qr/\d{4}/;			# the same as YYYY
+
+    parse "M","Month",qr/January|February|March|April|May|June|July|August|September|October|November|December/;
+    parse "M","Mon",qr/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/;
+    parse "M","MO",qr/JA|FE|MR|AP|MY|JN|JL|AU|SE|OC|NV|DE/;
+    parse "M","MM",qr/01|02|03|04|05|06|07|08|09|10|11|12/;
+    parse "M","M",qr/1|2|3|4|5|6|7|8|9|10|11|12/;
+
+    parse "D","DD",qr/01|02|03|04|05|06|07|08|09|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31/;
+    parse "D","D",qr/1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31/;
+
+    parse "e","Epoch",qr/\d{1,10}/;		# epoch any
+    parse "e","epoch",qr/\d{10}/;		# epoch ten digit
+
+    parse "h","hh",qr/0\d|1\d|2[0-4]/;		# permissive allows "24"
+   #parse "h","hx",qr/\d|1\d|2[0-3]/;		# strict "01" forbidden, "24" forbidden
+    parse "h","h",qr/\d|[01]\d|2[0-4]/;		# permissive allows "24" and "01" too
+
+    parse "m","mm",qr/[0-5]\d|60/;		# permissive allows "60"
+   #parse "m","mx",qr/\d|[1-5]\d/;		# strict "01" forbidden, "60" forbidden
+    parse "m","m",qr/\d|[0-5]\d|60/;		# permissive allows "60" and "01" too
+
+   #parse "s","sss",qr/[0-5]\d|60/;		# permissive allows "60", decimal optional, any number of places
+    parse "s","ss.ss",qr/[0-5]\d\.\d\d|60\.00/; # permissive allows "60.00"
+    parse "s","ss.s",qr/[0-5]\d\.\d|60\.0/;	# permissive allows "60.0"
+    parse "s","ss",qr/[0-5]\d|60/;		# permissive allows "60"
+   #parse "s","sx",qr/\d|[1-5]\d/;		# strict "01" forbidden, "60" forbidden
+    parse "s","s",qr/\d|[0-5]\d|60/;		# permissive allows "60" and "01" too
+
+    # unescape
+    # prtx "2",$REIF{$str}; prtx "2",$VEIF{$str};
+    while($REIF{$str}=~s/$STX([0-9]+)$ETX/$HIDEN[$1]/) {}
+    while($VEIF{$str}=~s/$STX([0-9]+)$ETX/$HIDEN[$1]/) {}
+    # prtx "3",$REIF{$str}; prtx "3",$VEIF{$str};
+
+    # identify the order of format variable parts (regex groups)
+
+    $FOUND =~ s/\|$//; # print STDERR "--> $FOUND\n";
+    my $z = $str; # copy
+    my $i = 0; # which re group ($1,$2,...) holds YYYY,MM.. =0 so the %VIF starts with index 0 
+    $VIF{$str}{$1}=$i++ while $z=~s/($FOUND)// }} # one-by-one remove them and note the $i
+
+} # R.Jaksa 2017,2024 GPLv3
+# end "input-parser.pl"
+
+# included "output-parser.pl"
+{ # OUTPUT FORMAT PARSER FOR DATE2DATE
+
+  # included "time2epoch.pl"
+  use Time::Local 'timelocal_nocheck';
+  use Time::Local 'timegm_nocheck';
+
+  sub time2epoch {
+    my $y = $_[0];
+    my $m = $_[1];
+    my $d = $_[2];
+    my $H = $_[3];
+    my $M = $_[4];
+    my $S = $_[5];
+    my $isutc = $_[6];
+
+    my $input = sprintf "%d-%02d-%02d %02d:%02d:%02d",$y,$m,$d,$H,$M,$S;
+    $input .= "Z" if $isutc;
+
+    # corrections
+    my $c=0; # flag: whether corrected
+    while($H>=24) { $H-=24; $d++; $c=1; } 
+    my $correct = sprintf "%d-%02d-%02d %02d:%02d:%02d",$y,$m,$d,$H,$M,$S;
+    $correct .= "Z" if $isutc;
+
+    # localtime
+    my $epoch;
+    if($isutc) {
+      $epoch = timegm_nocheck($S,$M,$H,$d,$m-1,$y); }
+    else {
+      $epoch = timelocal_nocheck($S,$M,$H,$d,$m-1,$y); }
+
+    $input .= " -> $correct" if $c;
+    #debug "epoch","$input -> $epoch";
+    return $epoch; }
+  # end "time2epoch.pl"
+
+my @Month = ("","January","February","March","April","May","June","July","August","September","October","November","December");
+my @Mon = ("","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec");
+my @MO = ("","JA","FE","MR","AP","MY","JN","JL","AU","SE","OC","NV","DE");
+
+my @HIDEN=(); # stored strings for replacement in the input format string
+my $hi;	      # current index in @HIDEN
+my $str;      # current output string
+
+# parse($variable_name,$current_value) $_[0]="yyyy" $_[1]="2023"
+my sub parse { $HIDEN[$hi++]=$_[1] while $str=~s/$_[0]/$STX$hi$ETX/ }
+
+our sub output_parser {
+  my ($Y,$M,$D,$h,$m,$s) = @_; # day/month/year/hour/minute/second
+  # print STDERR "-> $Y-$M-$D $h:$m:$s\n";
+
+  my $YYYY = d2dddd $Y;
+  my $YY = d2dd $Y; $YY=$1 if $Y=~/([0-9][0-9])$/;
+
+  $str=$OF; @HIDEN=(); $hi=0;
+
+  # hide escapes \Y,\M,\D,...
+  while($str=~s/\\([YyMDhmseE~])/$STX$hi$ETX/) { $HIDEN[$hi++]=$1 }
+
+  # replace ~ by spaces
+  $str =~ s/\~/ /g;
+
+  parse "yyyy",$YYYY;
+  parse "YYYY",$YYYY;
+  parse "YY",$YY;
+  parse "Year",$Y;
+  parse "Y",$Y; # not YYYY here
+
+  parse "Month",$Month[$M];
+  parse "Mon",$Mon[$M];
+  parse "MO",$MO[$M];
+  parse "MM",d2dd($M);;
+  parse "M",$M;
+
+  parse "DD",d2dd($D);
+  parse "D",$D;
+
+  parse "Epoch",time2epoch($Y,$M,$D,$h,$m,$s);
+  parse "epoch",d10d(time2epoch($Y,$M,$D,$h,$m,$s));
+
+  parse "hh",d2dd($h);
+  parse "h",$h;
+
+  parse "mm",d2dd($m);
+  parse "m",$m;
+
+  parse "ss",d2dd($s);
+  parse "s",$s;
+
+  while($str=~s/$STX([0-9]+)$ETX/$HIDEN[$1]/) {}
+  return $str }
+
+} # R.Jaksa 2017,2024 GPLv3
+# end "output-parser.pl"
+
+input_parser;
+
+# verbose
+for(@IF) {
+  verbose "input format",$VEIF{$_},"($IFhow)";
+  verbose  "input regex",$REIF{$_} if $DEBUG }
+verbose "output format",$OF,"($OFhow)";
+
+# debug
+if(0) { for my $k (keys %REIF) {
+  print "$k $CK_->$CD_ $REIF{$k}\n";
+  print "$VIF{$k}{$_}: $_\n" for sort {$VIF{$k}{$a}<=>$VIF{$k}{$b}} keys %{$VIF{$k}};
+  exit }}
+
+# ---------------------------------------------------------------------------------------------- MAIN
+
+# included "processor.pl"
+{ # PROCESSOR
+  # require parser.pl
+
+  # included "epoch2time.pl"
+
+  our sub epoch2time {
+    my $epoch = $_[0];
+    my $isutc = $_[1];
+    my ($Y,$M,$D,$h,$m,$s);
+
+    if($isutc) { ($s,$m,$h,$D,$M,$Y) = (gmtime($epoch))[0,1,2,3,4,5] }
+    else       { ($s,$m,$h,$D,$M,$Y) = (localtime($epoch))[0,1,2,3,4,5] }
+    $Y += 1900;
+    $M += 1;
+
+    return $Y,$M,$D,$h,$m,$s }
+  # end "epoch2time.pl"
+
+  # globals %REIF %VIF %NOW $COLOR
+
+my %Month2M = ("January",1,"February",2,"March",3,"April",4,"May",5,"June",6,"July",7,"August",8,"September",9,"October",10,"November",11,"December",12);
+my %Mon2M = ("Jan",1,"Feb",2,"Mar",3,"Apr",4,"May",5,"Jun",6,"Jul",7,"Aug",8,"Sep",9,"Oct",10,"Nov",11,"Dec",12);
+my %MO2M = ("JA",1,"FE",2,"MR",3,"AP",4,"MY",5,"JN",6,"JL",7,"AU",8,"SE",9,"OC",10,"NV",11,"DE",12);
+
+my $color;
+   $color=$CC_ if $COLOR eq "C";
+   $color=$CR_ if $COLOR eq "R";
+   $color=$CG_ if $COLOR eq "G";
+   $color=$CK_ if $COLOR eq "K";
+   $color=$CW_ if $COLOR eq "W";
+
+our sub process_line {
+  my $line=$_[0]; # line to process
+  my $out="";	  # output line
+  my %REP;	  # replaced dates
+  my $i=0;	  # their indexes
+  # print STDERR "--> [$line]\n";
+
+  # for every input date format
+  for my $if (@IF) {
+  # print STDERR "    [$if]\n";
+
+    # for every match of given input date format on given line
+    while($line =~ s/(?<=^|$MAR)$REIF{$if}(?=$|$MAR)/$STX$i$ETX/) {
+      my @f = ($1,$2,$3,$4,$5,$6,$7); # Y M D h m s e <- max 7 fields in the match
+      my      ($Y,$M,$D,$h,$m,$s);    # 6 time variables
+      my $N = $VIF{$if}; # reference to the subhash for current $if
+
+      # init with current date/time
+      ($Y,$M,$D,$h,$m,$s) = ($NOW{Y},$NOW{M},$NOW{D},$NOW{h},$NOW{m},$NOW{s});
+
+      # epoch time overrides init, but will be overriden with Y/M/D...
+      my $epoch;
+      $epoch = $f[$N->{Epoch}]	if defined $N->{Epoch};
+      $epoch = $f[$N->{epoch}]	if defined $N->{epoch};
+      ($Y,$M,$D,$h,$m,$s) = epoch2time $epoch if defined $epoch;
+
+      # order by precision, 1st less precise / less permissive
+      $Y = $f[$N->{YY}]+1900	if defined $N->{YY} and $x[$N->{YY}]>=$NOW{Y}+10;
+      $Y = $f[$N->{YY}]+2000	if defined $N->{YY} and $x[$N->{YY}]<$NOW{Y}+10;
+      $Y = $f[$N->{Year}]	if defined $N->{Year};
+      $Y = $f[$N->{Y}]		if defined $N->{Y};
+      $Y = $f[$N->{YYYY}]	if defined $N->{YYYY};
+      $Y = $f[$N->{yyyy}]	if defined $N->{yyyy};
+
+      $M = $f[$N->{M}]		if defined $N->{M};
+      $M = $f[$N->{MM}]+0	if defined $N->{MM};
+      $M = $MO2M{$f[$N->{MO}]}	if defined $N->{MO};
+      $M = $Mon2M{$f[$N->{Mon}]} if defined $N->{Mon};
+      $M = $Month2M{$f[$N->{Month}]} if defined $N->{Month};
+
+      $D = $f[$N->{D}]		if defined $N->{D};
+      $D = $f[$N->{DD}]+0	if defined $N->{DD};
+
+      $h = $f[$N->{h}]		if defined $N->{h};
+      $h = $f[$N->{hh}]+0	if defined $N->{hh};
+
+      $m = $f[$N->{m}]		if defined $N->{m};
+      $m = $f[$N->{mm}]+0	if defined $N->{mm};
+
+      $s = $f[$N->{s}]		if defined $N->{s};
+      $s = $f[$N->{ss}]+0	if defined $N->{ss};
+
+      # print STDERR "     $Y $M $D \n";
+      # prtx "1",$line;
+
+      $REP{$i++} = output_parser $Y,$M,$D,$h,$m,$s }}
+
+  if($COLOR) { $line =~ s/$STX$_$ETX/$color$REP{$_}$CD_/ for keys %REP }
+  else	     { $line =~ s/$STX$_$ETX/$REP{$_}/ for keys %REP }
+
+  return $line }
+
+} # R.Jaksa 2017,2024 GPLv3
+# end "processor.pl"
+
+# process files
+if(@FILE) {
+  for my $file (@FILE) {
+    my $handle;
+    open $handle,"$file" or die "$file: $!";
+    print process_line($_) while <$handle>;
+    close $handle }}
+
+# otherwise process STDIN
+else {
+  binmode  STDIN; STDIN->blocking(0);
+  binmode STDOUT; STDOUT->autoflush(1);
+  my $str;
+  while(1) {
+    my $buf; my $n = sysread STDIN,$buf,4096;
+    sleep 0.1 if not defined $n; # nothing to read
+    next      if not defined $n;
+    last      if $n==0;	# EOF
+    $str .= $buf;
+    print process_line($&) while $str =~ s/^.*\n// }
+  print process_line($str)."\n" if $str ne "" }
+
+# --------------------------------------------------------------------------- R.Jaksa 2017,2024 GPLv3
